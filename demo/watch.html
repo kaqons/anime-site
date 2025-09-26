@@ -59,6 +59,7 @@
     const epParam = qs.get('ep');
     const frame = document.getElementById('frame');
     const video = document.getElementById('video');
+    video.crossOrigin = 'anonymous';
     const episodesEl = document.getElementById('episodes');
     const titleEl = document.getElementById('title');
     const metaEl = document.getElementById('meta');
@@ -84,19 +85,35 @@
       }
       const data = await j(url);
       const src = data?.sources?.[0]?.url || data?.sources?.[0]?.file || data?.download || '';
-      const isM3U8 = src.endsWith('.m3u8') || src.includes('m3u8');
+      const isM3U8 = src && (src.endsWith('.m3u8') || src.includes('m3u8'));
       if(!src){ window.location.href = '/missing.html'; return; }
+
+      // reset previous playback
+      try { video.pause(); } catch {}
+      video.removeAttribute('src');
+      video.load();
+      frame.src = 'about:blank';
+
       if(isM3U8){
         frame.style.display = 'none';
         video.style.display = 'block';
-        if(window.hls){ window.hls.destroy?.(); }
+        if(window.hls){ window.hls.destroy?.(); window.hls = null; }
         if(video.canPlayType('application/vnd.apple.mpegURL')){
           video.src = src;
-        } else {
+          video.load();
+          video.play().catch(()=>{});
+        } else if (window.Hls) {
           const hls = new Hls({maxBufferLength:60});
           window.hls = hls;
           hls.loadSource(src);
           hls.attachMedia(video);
+          hls.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(()=>{}); });
+          hls.on(Hls.Events.ERROR, () => { /* fallback to iframe if fatal */ });
+        } else {
+          // if hls.js failed to load for some reason, fallback to iframe
+          video.style.display = 'none';
+          frame.style.display = 'block';
+          frame.src = src;
         }
       } else {
         video.style.display = 'none';
