@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anime Browser</title>
+  <style>
+    :root{--bg:#0b0d10;--panel:#11161c;--text:#e6edf3;--muted:#9fb3c8;--brand:#7aa2f7;--accent:#2ea043;--border:#243041}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
+    header{position:sticky;top:0;background:linear-gradient(180deg,var(--bg),rgba(11,13,16,.85));backdrop-filter:saturate(1.2) blur(6px);border-bottom:1px solid var(--border);z-index:10}
+    .wrap{max-width:1100px;margin:0 auto;padding:16px}
+    h1{margin:0;font-size:18px}
+    .search{display:flex;gap:8px;margin-top:10px}
+    input,select,button{background:var(--panel);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:10px}
+    input,select{flex:1}
+    button{cursor:pointer}
+    main{max-width:1100px;margin:0 auto;padding:16px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+    .thumb{aspect-ratio:3/4;background:#1a232e;display:block;width:100%;object-fit:cover}
+    .meta{padding:10px 12px}
+    .title{font-size:14px;margin:0 0 6px 0}
+    .muted{color:var(--muted);font-size:12px}
+    .toolbar{display:flex;gap:8px;align-items:center;margin:12px 0;flex-wrap:wrap}
+    .status{font-size:12px;color:var(--muted)}
+    .controls{display:flex;gap:8px;align-items:center;margin-left:auto}
+    .btn{padding:8px 12px;border-radius:10px;background:var(--panel);border:1px solid var(--border);color:var(--text);cursor:pointer}
+    .btn[disabled]{opacity:.5;cursor:not-allowed}
+    .skeleton{background:linear-gradient(90deg,#10161f 25%,#0e141c 37%,#10161f 63%);background-size:400% 100%;animation:shimmer 1.2s ease-in-out infinite}
+    @keyframes shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+    .provider{width:200px}
+    .err{color:#ff6b6b}
+    footer{color:var(--muted);text-align:center;padding:24px}
+    a{color:var(--brand)}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>Anime Browser</h1>
+      <div class="toolbar">
+        <select id="provider" class="provider" title="Provider">
+          <option value="gogoanime" selected>Gogoanime</option>
+          <option value="zoro">Zoro</option>
+        </select>
+        <input id="query" placeholder="Search anime..." />
+        <button id="search" class="btn">Search</button>
+        <button id="popular" class="btn">Popular</button>
+        <button id="recent" class="btn">Recent</button>
+        <div class="controls">
+          <button id="prev" class="btn">Prev</button>
+          <span id="page" class="status">Page 1</span>
+          <button id="next" class="btn">Next</button>
+        </div>
+        <span id="status" class="status"></span>
+      </div>
+    </div>
+  </header>
+  <main>
+    <div class="wrap">
+      <div id="grid" class="grid"></div>
+    </div>
+  </main>
+  <footer>
+    Powered by <a href="https://docs.consumet.org" target="_blank" rel="noreferrer">Consumet</a>
+  </footer>
+  <script>
+    const grid = document.getElementById('grid');
+    const providerSel = document.getElementById('provider');
+    const q = document.getElementById('query');
+    const statusEl = document.getElementById('status');
+    const btnSearch = document.getElementById('search');
+    const btnPopular = document.getElementById('popular');
+    const btnRecent = document.getElementById('recent');
+    const btnPrev = document.getElementById('prev');
+    const btnNext = document.getElementById('next');
+    const pageEl = document.getElementById('page');
+
+    const state = { mode: 'popular', page: 1 };
+
+    function setStatus(t){ statusEl.textContent = t || '' }
+    function cardHtml(item){
+      const title = item.title?.romaji || item.title?.english || item.title || 'Untitled';
+      const image = item.image || item.cover || item.poster || '';
+      const sub = item.sub || (Array.isArray(item.genres)? item.genres.slice(0,3).join(', ') : (item.status || ''));
+      return `<div class="card">
+        <img class="thumb" src="${image}" alt="${title}" loading="lazy" onerror="this.style.display='none'" />
+        <div class="meta">
+          <h3 class="title">${title}</h3>
+          <div class="muted">${sub}</div>
+        </div>
+      </div>`;
+    }
+
+    async function fetchJson(path){
+      const res = await fetch(path);
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      return res.json();
+    }
+
+    function renderSkeleton(count){
+      const items = Array.from({length: count}).map(() => (
+        `<div class="card">
+          <div class="thumb skeleton"></div>
+          <div class="meta">
+            <div class="skeleton" style="height:14px;width:80%;border-radius:6px"></div>
+            <div class="skeleton" style="height:12px;width:50%;margin-top:8px;border-radius:6px"></div>
+          </div>
+        </div>`
+      ));
+      grid.innerHTML = items.join('');
+    }
+
+    function render(list){
+      grid.innerHTML = (list || []).map(cardHtml).join('');
+    }
+
+    function setPage(p){ state.page = Math.max(1, p); pageEl.textContent = 'Page ' + state.page }
+
+    function getInfoUrl(prov, id){
+      if(prov==='gogoanime') return '/anime/gogoanime/info/' + encodeURIComponent(id);
+      if(prov==='zoro') return '/anime/zoro/info?id=' + encodeURIComponent(id);
+      return '#';
+    }
+
+    function attachCardClicks(prov, list){
+      // Open info JSON in a new tab for now
+      const cards = document.querySelectorAll('.card');
+      cards.forEach((card, idx) => {
+        const item = list[idx];
+        const id = item?.id;
+        if(!id) return;
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', () => window.open(getInfoUrl(prov, id), '_blank'));
+      });
+    }
+
+    async function search(){
+      const prov = providerSel.value;
+      const term = q.value.trim();
+      if(!term){ setStatus('Enter a query'); return }
+      try{
+        setStatus('Searching...');
+        setPage(1);
+        renderSkeleton(10);
+        let data;
+        if(prov==='gogoanime'){
+          data = await fetchJson(`/anime/gogoanime/${encodeURIComponent(term)}?page=${state.page}`);
+        }else if(prov==='zoro'){
+          data = await fetchJson(`/anime/zoro/${encodeURIComponent(term)}?page=${state.page}`);
+        }
+        render(data?.results || []);
+        attachCardClicks(prov, data?.results || []);
+        setStatus(`Found ${(data?.results||[]).length} results`);
+        state.mode = 'search';
+      }catch(e){ setStatus('Error: '+(e && e.message ? e.message : e)); }
+    }
+
+    async function popular(){
+      const prov = providerSel.value;
+      try{
+        setStatus('Loading popular...');
+        renderSkeleton(10);
+        let data;
+        if(prov==='gogoanime'){
+          data = await fetchJson('/anime/gogoanime/popular?page=' + state.page);
+        }else if(prov==='zoro'){
+          data = await fetchJson('/anime/zoro/most-popular?page=' + state.page);
+        }
+        render(data?.results || []);
+        attachCardClicks(prov, data?.results || []);
+        setStatus('');
+        state.mode = 'popular';
+      }catch(e){ setStatus('Error: '+(e && e.message ? e.message : e)); }
+    }
+
+    async function recent(){
+      const prov = providerSel.value;
+      try{
+        setStatus('Loading recent...');
+        renderSkeleton(10);
+        let data;
+        if(prov==='gogoanime'){
+          data = await fetchJson('/anime/gogoanime/recent-episodes?page=' + state.page);
+        }else if(prov==='zoro'){
+          data = await fetchJson('/anime/zoro/recent-episodes?page=' + state.page);
+        }
+        render(data?.results || []);
+        attachCardClicks(prov, data?.results || []);
+        setStatus('');
+        state.mode = 'recent';
+      }catch(e){ setStatus('Error: '+(e && e.message ? e.message : e)); }
+    }
+
+    btnSearch.addEventListener('click', search);
+    btnPopular.addEventListener('click', popular);
+    btnRecent.addEventListener('click', recent);
+    q.addEventListener('keypress', function(e){ if(e.key==='Enter') search() });
+
+    btnPrev.addEventListener('click', function(){
+      if(state.page <= 1) return; setPage(state.page - 1);
+      if(state.mode==='popular') popular();
+      else if(state.mode==='recent') recent();
+      else if(state.mode==='search') search();
+    });
+    btnNext.addEventListener('click', function(){
+      setPage(state.page + 1);
+      if(state.mode==='popular') popular();
+      else if(state.mode==='recent') recent();
+      else if(state.mode==='search') search();
+    });
+
+    // initial load
+    setPage(1); popular();
+  </script>
+</body>
+</html>
+
+
