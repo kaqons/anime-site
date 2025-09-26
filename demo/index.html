@@ -123,6 +123,9 @@
       if(prov==='zoro') return '/anime/zoro/info?id=' + encodeURIComponent(id);
       return '#';
     }
+    function getWatchUrl(prov, id){
+      return '/watch.html?provider=' + encodeURIComponent(prov) + '&id=' + encodeURIComponent(id);
+    }
 
     function attachCardClicks(prov, list){
       // Open info JSON in a new tab for now
@@ -132,7 +135,7 @@
         const id = item?.id;
         if(!id) return;
         card.style.cursor = 'pointer';
-        card.addEventListener('click', () => window.open(getInfoUrl(prov, id), '_blank'));
+        card.addEventListener('click', () => window.location.href = getWatchUrl(prov, id));
       });
     }
 

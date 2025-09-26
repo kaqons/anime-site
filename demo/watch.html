@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Watch</title>
+  <style>
+    :root{--bg:#0b0d10;--panel:#11161c;--text:#e6edf3;--muted:#9fb3c8;--border:#243041;--brand:#7aa2f7}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
+    header{padding:12px 16px;border-bottom:1px solid var(--border)}
+    a{color:var(--brand)}
+    .wrap{max-width:1100px;margin:0 auto;padding:16px}
+    .player{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+    iframe{width:100%;height:100%;border:0}
+    .row{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px}
+    .col{flex:1 1 280px}
+    .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px}
+    .episodes{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;max-height:460px;overflow:auto}
+    .btn{background:#0f1420;border:1px solid var(--border);color:var(--text);padding:8px;border-radius:8px;cursor:pointer}
+    .btn.active{outline:2px solid var(--brand)}
+    .toolbar{display:flex;gap:8px;align-items:center;margin:8px 0}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <a href="/">← Back</a>
+    </div>
+  </header>
+  <main class="wrap">
+    <div class="player">
+      <iframe id="frame" allowfullscreen></iframe>
+    </div>
+    <div class="row">
+      <div class="col panel">
+        <div class="toolbar">
+          <select id="server" class="btn">
+            <option value="vidcloud">Vidcloud</option>
+            <option value="streamsb">StreamSB</option>
+          </select>
+          <label><input type="checkbox" id="dub"/> Dub</label>
+        </div>
+        <div id="episodes" class="episodes"></div>
+      </div>
+      <div class="col panel">
+        <h3 id="title" style="margin:0 0 8px 0;font-size:18px"></h3>
+        <div id="meta" style="color:var(--muted);font-size:14px"></div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const qs = new URLSearchParams(location.search);
+    const prov = qs.get('provider') || 'zoro';
+    const id = qs.get('id');
+    const epParam = qs.get('ep');
+    const frame = document.getElementById('frame');
+    const episodesEl = document.getElementById('episodes');
+    const titleEl = document.getElementById('title');
+    const metaEl = document.getElementById('meta');
+    const serverSel = document.getElementById('server');
+    const dubChk = document.getElementById('dub');
+
+    if(!id){ document.body.innerHTML = '<div class="wrap">Missing id</div>'; throw new Error('missing id'); }
+
+    async function j(path){ const r = await fetch(path); if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }
+
+    function setEpisodeActive(episodeId){
+      document.querySelectorAll('.btn.ep').forEach(b=> b.classList.toggle('active', b.dataset.id===episodeId));
+    }
+
+    async function loadSources(episodeId){
+      const server = serverSel.value;
+      const dub = dubChk.checked;
+      let url;
+      if(prov==='zoro'){
+        url = `/anime/zoro/watch/${encodeURIComponent(episodeId)}?server=${server}&dub=${dub?'true':'false'}`;
+      }else{
+        url = `/anime/gogoanime/watch/${encodeURIComponent(episodeId)}?server=${server}`;
+      }
+      const data = await j(url);
+      const src = data?.sources?.[0]?.url || data?.sources?.[0]?.file || data?.download || '';
+      if(!src){ frame.srcdoc = '<div style="color:#fff;padding:20px">No sources available</div>'; return; }
+      frame.src = src;
+      setEpisodeActive(episodeId);
+      const u = new URL(location.href);
+      u.searchParams.set('ep', episodeId);
+      history.replaceState(null, '', u.toString());
+    }
+
+    async function init(){
+      let info;
+      if(prov==='zoro'){
+        info = await j(`/anime/zoro/info?id=${encodeURIComponent(id)}`);
+      }else{
+        info = await j(`/anime/gogoanime/info/${encodeURIComponent(id)}`);
+      }
+      titleEl.textContent = info?.title || 'Unknown title';
+      metaEl.textContent = (info?.type || '') + (info?.releaseDate? ' • '+info.releaseDate : '');
+      const episodes = info?.episodes || info?.episodesList || [];
+      episodesEl.innerHTML = '';
+      episodes.forEach((ep,i) => {
+        const epId = ep?.id || ep?.episodeId || ep?.idEpisode || ep?.url || '';
+        const btn = document.createElement('button');
+        btn.className = 'btn ep';
+        btn.dataset.id = epId;
+        btn.textContent = (ep?.number || ep?.episode || i+1);
+        btn.onclick = () => loadSources(epId);
+        episodesEl.appendChild(btn);
+      });
+      const first = epParam || (episodes[0]?.id || episodes[0]?.episodeId || episodes[0]?.idEpisode || episodes[0]?.url);
+      if(first) loadSources(first);
+    }
+
+    serverSel.addEventListener('change', ()=>{
+      const active = document.querySelector('.btn.ep.active');
+      if(active) loadSources(active.dataset.id);
+    });
+    dubChk.addEventListener('change', ()=>{
+      const active = document.querySelector('.btn.ep.active');
+      if(active) loadSources(active.dataset.id);
+    });
+
+    init();
+  </script>
+</body>
+</html>
+
+
