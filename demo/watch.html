@@ -11,8 +11,9 @@
     header{padding:12px 16px;border-bottom:1px solid var(--border)}
     a{color:var(--brand)}
     .wrap{max-width:1100px;margin:0 auto;padding:16px}
-    .player{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--border);border-radius:12px;overflow:hidden}
-    iframe{width:100%;height:100%;border:0}
+    .player{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--border);border-radius:12px;overflow:hidden;position:relative}
+    iframe{width:100%;height:100%;border:0;position:absolute;inset:0}
+    video{width:100%;height:100%;position:absolute;inset:0;background:#000}
     .row{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px}
     .col{flex:1 1 280px}
     .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px}
@@ -30,7 +31,8 @@
   </header>
   <main class="wrap">
     <div class="player">
-      <iframe id="frame" allowfullscreen></iframe>
+      <video id="video" controls playsinline></video>
+      <iframe id="frame" allowfullscreen style="display:none"></iframe>
     </div>
     <div class="row">
       <div class="col panel">
@@ -56,6 +58,7 @@
     const id = qs.get('id');
     const epParam = qs.get('ep');
     const frame = document.getElementById('frame');
+    const video = document.getElementById('video');
     const episodesEl = document.getElementById('episodes');
     const titleEl = document.getElementById('title');
     const metaEl = document.getElementById('meta');
@@ -81,8 +84,25 @@
       }
       const data = await j(url);
       const src = data?.sources?.[0]?.url || data?.sources?.[0]?.file || data?.download || '';
-      if(!src){ frame.srcdoc = '<div style="color:#fff;padding:20px">No sources available</div>'; return; }
-      frame.src = src;
+      const isM3U8 = src.endsWith('.m3u8') || src.includes('m3u8');
+      if(!src){ window.location.href = '/missing.html'; return; }
+      if(isM3U8){
+        frame.style.display = 'none';
+        video.style.display = 'block';
+        if(window.hls){ window.hls.destroy?.(); }
+        if(video.canPlayType('application/vnd.apple.mpegURL')){
+          video.src = src;
+        } else {
+          const hls = new Hls({maxBufferLength:60});
+          window.hls = hls;
+          hls.loadSource(src);
+          hls.attachMedia(video);
+        }
+      } else {
+        video.style.display = 'none';
+        frame.style.display = 'block';
+        frame.src = src;
+      }
       setEpisodeActive(episodeId);
       const u = new URL(location.href);
       u.searchParams.set('ep', episodeId);
@@ -122,7 +142,11 @@
       if(active) loadSources(active.dataset.id);
     });
 
-    init();
+    // hls.js from CDN
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js';
+    s.onload = init;
+    document.head.appendChild(s);
   </script>
 </body>
 </html>

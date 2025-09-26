@@ -159,6 +159,14 @@ export const tmdbApi = process.env.TMDB_KEY && process.env.TMDB_KEY;
         return reply.status(500).send({ message: 'Could not load the watch page' });
       }
     });
+    fastify.get('/missing.html', async (_, reply) => {
+      try {
+        const stream = fs.readFileSync(__dirname + '/../demo/missing.html');
+        return reply.type('text/html').send(stream);
+      } catch (err) {
+        return reply.status(500).send({ message: 'Could not load the page' });
+      }
+    });
     fastify.get('*', (request, reply) => {
       reply.status(404).send({
         message: '',
