@@ -80,14 +80,7 @@
       const dub = dubChk.checked;
       let url;
       if(prov==='zoro'){
-        // Handle special formats in episode IDs
-        // 1. Remove any 'episode-XXXX' suffix that causes 404 errors
-        // 2. Replace $ with - to avoid encoding issues
-        let cleanEpisodeId = episodeId;
-        if(cleanEpisodeId.includes('-episode-')) {
-          cleanEpisodeId = cleanEpisodeId.split('-episode-')[0];
-        }
-        cleanEpisodeId = cleanEpisodeId.replace(/\$/g, '-');
+        let cleanEpisodeId = episodeId.split('$episode$')[0];
         url = `/anime/zoro/watch/${cleanEpisodeId}?server=${server}&dub=${dub?'true':'false'}`;
       }else{
         url = `/anime/gogoanime/watch/${encodeURIComponent(episodeId)}?server=${server}`;
