@@ -41,8 +41,16 @@
       <h1>Anime Browser</h1>
       <div class="toolbar">
         <select id="provider" class="provider" title="Provider">
-          <option value="gogoanime" selected>Gogoanime</option>
-          <option value="zoro">Zoro</option>
+          <option value="zoro" selected>Zoro</option>
+          <option value="gogoanime">Gogoanime</option>
+          <option value="animepahe">Animepahe</option>
+          <option value="anix">Anix</option>
+          <option value="9anime">9anime</option>
+          <option value="animekai">Animekai</option>
+          <option value="marin">Marin</option>
+          <option value="bilibili">Bilibili</option>
+          <option value="crunchyroll">Crunchyroll</option>
+          <option value="anify">Anify</option>
         </select>
         <input id="query" placeholder="Search anime..." />
         <button id="search" class="btn">Search</button>
@@ -121,21 +129,24 @@
     function getInfoUrl(prov, id){
       if(prov==='gogoanime') return '/anime/gogoanime/info/' + encodeURIComponent(id);
       if(prov==='zoro') return '/anime/zoro/info?id=' + encodeURIComponent(id);
-      return '#';
+      return '/anime/' + prov + '/info?id=' + encodeURIComponent(id);
     }
+    const watchSupported = new Set(['zoro','gogoanime']);
     function getWatchUrl(prov, id){
       return '/watch.html?provider=' + encodeURIComponent(prov) + '&id=' + encodeURIComponent(id);
     }
 
     function attachCardClicks(prov, list){
-      // Open info JSON in a new tab for now
       const cards = document.querySelectorAll('.card');
       cards.forEach((card, idx) => {
         const item = list[idx];
         const id = item?.id;
         if(!id) return;
         card.style.cursor = 'pointer';
-        card.addEventListener('click', () => window.location.href = getWatchUrl(prov, id));
+        card.addEventListener('click', () => {
+          if(watchSupported.has(prov)) window.location.href = getWatchUrl(prov, id);
+          else window.open(getInfoUrl(prov, id), '_blank');
+        });
       });
     }
 
@@ -147,17 +158,22 @@
         setStatus('Searching...');
         setPage(1);
         renderSkeleton(10);
-        let data;
-        if(prov==='gogoanime'){
-          data = await fetchJson(`/anime/gogoanime/${encodeURIComponent(term)}?page=${state.page}`);
-        }else if(prov==='zoro'){
-          data = await fetchJson(`/anime/zoro/${encodeURIComponent(term)}?page=${state.page}`);
-        }
+        let data = await fetchJson(`/anime/${prov}/${encodeURIComponent(term)}?page=${state.page}`);
         render(data?.results || []);
         attachCardClicks(prov, data?.results || []);
         setStatus(`Found ${(data?.results||[]).length} results`);
         state.mode = 'search';
-      }catch(e){ setStatus('Error: '+(e && e.message ? e.message : e)); }
+      }catch(e){
+        const alt = prov!=='zoro' ? 'zoro' : 'gogoanime';
+        try{
+          setStatus(`Error (${e?.message}). Trying ${alt}...`);
+          const data = await fetchJson(`/anime/${alt}/${encodeURIComponent(term)}?page=${state.page}`);
+          providerSel.value = alt;
+          render(data?.results || []);
+          attachCardClicks(alt, data?.results || []);
+          setStatus(`Switched to ${alt}. Found ${(data?.results||[]).length} results`);
+        }catch(e2){ setStatus('Error: '+(e2 && e2.message ? e2.message : e2)); }
+      }
     }
 
     async function popular(){
@@ -165,17 +181,38 @@
       try{
         setStatus('Loading popular...');
         renderSkeleton(10);
+        const candidates = {
+          zoro: ['/anime/zoro/most-popular'],
+          gogoanime: ['/anime/gogoanime/popular'],
+          animekai: ['/anime/animekai/new-releases','/anime/animekai/recent-added','/anime/animekai/recent-episodes'],
+          anix: ['/anime/anix/popular','/anime/anix/trending','/anime/anix/recent-episodes'],
+          '9anime': ['/anime/9anime/trending','/anime/9anime/popular','/anime/9anime/recent-episodes'],
+          animepahe: ['/anime/animepahe/recent-episodes'],
+          crunchyroll: ['/anime/crunchyroll/trending','/anime/crunchyroll/popular'],
+          bilibili: ['/anime/bilibili/popular'],
+          marin: ['/anime/marin/popular'],
+          anify: ['/anime/anify/popular']
+        };
         let data;
-        if(prov==='gogoanime'){
-          data = await fetchJson('/anime/gogoanime/popular?page=' + state.page);
-        }else if(prov==='zoro'){
-          data = await fetchJson('/anime/zoro/most-popular?page=' + state.page);
+        for(const u of (candidates[prov]||[`/anime/${prov}/popular`])){
+          try{ data = await fetchJson(u + `?page=${state.page}`); break; }catch(_){ }
         }
         render(data?.results || []);
         attachCardClicks(prov, data?.results || []);
         setStatus('');
         state.mode = 'popular';
-      }catch(e){ setStatus('Error: '+(e && e.message ? e.message : e)); }
+      }catch(e){
+        const alt = prov!=='zoro' ? 'zoro' : 'gogoanime';
+        try{
+          setStatus(`Error (${e?.message}). Trying ${alt}...`);
+          const u = alt==='zoro' ? '/anime/zoro/most-popular' : '/anime/gogoanime/popular';
+          const data = await fetchJson(u + `?page=${state.page}`);
+          providerSel.value = alt;
+          render(data?.results || []);
+          attachCardClicks(alt, data?.results || []);
+          setStatus('');
+        }catch(e2){ setStatus('Error: '+(e2 && e2.message ? e2.message : e2)); }
+      }
     }
 
     async function recent(){
@@ -183,17 +220,38 @@
       try{
         setStatus('Loading recent...');
         renderSkeleton(10);
+        const candidates = {
+          zoro: ['/anime/zoro/recent-episodes'],
+          gogoanime: ['/anime/gogoanime/recent-episodes'],
+          animekai: ['/anime/animekai/recent-episodes','/anime/animekai/new-releases'],
+          anix: ['/anime/anix/recent-episodes'],
+          '9anime': ['/anime/9anime/recent-episodes'],
+          animepahe: ['/anime/animepahe/recent-episodes'],
+          crunchyroll: ['/anime/crunchyroll/recent-episodes'],
+          bilibili: ['/anime/bilibili/recent-episodes'],
+          marin: ['/anime/marin/recent-episodes'],
+          anify: ['/anime/anify/recent-episodes']
+        };
         let data;
-        if(prov==='gogoanime'){
-          data = await fetchJson('/anime/gogoanime/recent-episodes?page=' + state.page);
-        }else if(prov==='zoro'){
-          data = await fetchJson('/anime/zoro/recent-episodes?page=' + state.page);
+        for(const u of (candidates[prov]||[`/anime/${prov}/recent-episodes`])){
+          try{ data = await fetchJson(u + `?page=${state.page}`); break; }catch(_){ }
         }
         render(data?.results || []);
         attachCardClicks(prov, data?.results || []);
         setStatus('');
         state.mode = 'recent';
-      }catch(e){ setStatus('Error: '+(e && e.message ? e.message : e)); }
+      }catch(e){
+        const alt = prov!=='zoro' ? 'zoro' : 'gogoanime';
+        try{
+          setStatus(`Error (${e?.message}). Trying ${alt}...`);
+          const u = alt==='zoro' ? '/anime/zoro/recent-episodes' : '/anime/gogoanime/recent-episodes';
+          const data = await fetchJson(u + `?page=${state.page}`);
+          providerSel.value = alt;
+          render(data?.results || []);
+          attachCardClicks(alt, data?.results || []);
+          setStatus('');
+        }catch(e2){ setStatus('Error: '+(e2 && e2.message ? e2.message : e2)); }
+      }
     }
 
     btnSearch.addEventListener('click', search);
