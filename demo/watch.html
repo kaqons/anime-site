@@ -19,6 +19,7 @@
     .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px}
     .episodes{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;max-height:460px;overflow:auto}
     .btn{background:#0f1420;border:1px solid var(--border);color:var(--text);padding:8px;border-radius:8px;cursor:pointer}
+    .btn.ep{user-select:none}
     .btn.active{outline:2px solid var(--brand)}
     .toolbar{display:flex;gap:8px;align-items:center;margin:8px 0}
   </style>
@@ -143,12 +144,23 @@
         btn.className = 'btn ep';
         btn.dataset.id = epId;
         btn.textContent = (ep?.number || ep?.episode || i+1);
-        btn.onclick = () => loadSources(epId);
+        btn.type = 'button';
+        btn.onclick = (ev) => { ev.preventDefault(); ev.stopPropagation(); if(btn.dataset.id) loadSources(btn.dataset.id); };
         episodesEl.appendChild(btn);
       });
       const first = epParam || (episodes[0]?.id || episodes[0]?.episodeId || episodes[0]?.idEpisode || episodes[0]?.url);
       if(first) loadSources(first);
     }
+
+    // Event delegation safety to catch any clicks
+    episodesEl.addEventListener('click', (ev)=>{
+      const target = ev.target;
+      const btn = target && target.closest ? target.closest('.btn.ep') : null;
+      if(btn && btn.dataset && btn.dataset.id){
+        ev.preventDefault(); ev.stopPropagation();
+        loadSources(btn.dataset.id);
+      }
+    });
 
     serverSel.addEventListener('change', ()=>{
       const active = document.querySelector('.btn.ep.active');
