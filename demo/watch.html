@@ -80,12 +80,9 @@
       const dub = dubChk.checked;
       let url;
       if(prov==='zoro'){
-        // A more robust way to clean episode IDs
-        // 1. Split the ID by '?' to separate the query params
-        // 2. Take the first part, which is the actual ID
-        // 3. Replace any remaining special characters
-        const cleanEpisodeId = episodeId.split('?')[0].replace(/\$|episode=/g, '-');
-        url = `/anime/zoro/watch/${cleanEpisodeId}?server=${server}&dub=${dub?'true':'false'}`;
+        // For Zoro, use the episode ID exactly as provided by the API
+        // The Consumet library expects the full episode ID format
+        url = `/anime/zoro/watch/${encodeURIComponent(episodeId)}?server=${server}&dub=${dub?'true':'false'}`;
       }else{
         url = `/anime/gogoanime/watch/${encodeURIComponent(episodeId)}?server=${server}`;
       }
